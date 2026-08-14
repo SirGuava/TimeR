@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Timer de Boardgame Responsivo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    /* Efeito de Flash Visual do Bomba-Relógio na Tela Toda */
+    @keyframes bombFlash {
+      0% { background-color: rgba(220, 38, 38, 0.35); }
+      100% { background-color: transparent; }
+    }
+    .animate-bomb-flash {
+      animation: bombFlash 0.35s ease-out forwards;
+    }
+
+    /* Animação de Trepidação para a Fase de Pânico */
+    @keyframes panicShake {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      20% { transform: translate(-3px, 2px) scale(1.01); }
+      40% { transform: translate(3px, -2px) scale(0.99); }
+      60% { transform: translate(-2px, -2px) scale(1.01); }
+      80% { transform: translate(2px, 2px) scale(0.99); }
+    }
+    .animate-panic-shake {
+      animation: panicShake 0.25s infinite ease-in-out;
+    }
+
+    /* Animação do Feedback Flutuante no Centro do Card */
+    @keyframes floatUpFade {
+      0% { opacity: 0; transform: translate(-50%, -40%) scale(0.8); }
+      20% { opacity: 0.95; transform: translate(-50%, -50%) scale(1.05); }
+      80% { opacity: 0.95; transform: translate(-50%, -60%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -75%) scale(0.95); }
+    }
+    .animate-float-feedback {
+      animation: floatUpFade 1.6s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center select-none overflow-hidden">
+
+  <!-- CONTAINER PRINCIPAL -->
+  <div id="main-container" class="w-full h-screen max-w-lg bg-slate-950 flex flex-col justify-between relative overflow-hidden transition-colors duration-200">
+    
+    <!-- CAMADA DE EFEITO VISUAL DA BOMBA -->
+    <div id="bomb-flash-overlay" class="pointer-events-none absolute inset-0 z-10"></div>
+
+    <!-- TELA DE CONFIGURAÇÃO -->
+    <div id="setup-screen" class="flex-1 flex flex-col justify-between overflow-y-auto space-y-4 p-4 py-3 z-20">
+      <div>
+        <div class="flex items-center justify-center gap-2 mb-3">
+          <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <h1 class="text-xl font-bold tracking-wider text-slate-100 uppercase">Boardgame Timer</h1>
+        </div>
+
+        <!-- PERFIS DE CONFIGURAÇÃO SALVOS -->
+        <div class="bg-slate-900 p-3 rounded-2xl border border-slate-800 mb-3 space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400">📂 Perfis Salvos</span>
+            <button onclick="saveCurrentProfilePrompt()" class="text-[10px] bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-bold px-2.5 py-1 rounded-full border border-amber-500/30 transition">
+              + Salvar Atual
+            </button>
+          </div>
+          <div id="profiles-list" class="flex gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none"></div>
+        </div>
+        
+        <!-- Tempos Principais -->
+        <div class="grid grid-cols-2 gap-2.5 mb-3">
+          <div class="bg-slate-900 p-2.5 rounded-2xl border border-slate-800">
+            <label class="block text-[11px] font-medium text-slate-400 mb-0.5">Reserva de Tempo</label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="init-time" value="5" min="1" class="w-full bg-transparent text-base font-bold text-center text-white focus:outline-none">
+              <span class="text-xs text-slate-400 font-semibold">min</span>
+            </div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-2xl border border-slate-800">
+            <label class="block text-[11px] font-medium text-slate-400 mb-0.5">Fischer</label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="turn-bonus" value="30" min="0" class="w-full bg-transparent text-base font-bold text-center text-white focus:outline-none">
+              <span class="text-xs text-slate-400 font-semibold">seg</span>
+            </div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-2xl border border-slate-800">
+            <label class="block text-[11px] font-medium text-slate-400 mb-0.5">Meta Ágil</label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="quick-limit" value="30" min="1" class="w-full bg-transparent text-base font-bold text-center text-white focus:outline-none">
+              <span class="text-xs text-slate-400 font-semibold">seg</span>
+            </div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-2xl border border-slate-800">
+            <label class="block text-[11px] font-medium text-slate-400 mb-0.5">Bônus Ágil</label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="quick-bonus" value="5" min="0" class="w-full bg-transparent text-lg font-bold text-center text-white focus:outline-none">
+              <span class="text-xs text-slate-400 font-semibold">seg</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SELEÇÃO DO MODO DE ORDEM DE TURNOS -->
+        <div class="bg-slate-900 p-2.5 rounded-2xl border border-slate-800 mb-3 flex justify-between items-center">
+          <label class="text-[11px] font-medium text-slate-300">Ordem dos Turnos</label>
+          <select id="order-mode" class="bg-slate-950 text-white text-xs font-semibold rounded-xl px-3 py-1.5 border border-slate-700 outline-none">
+            <option value="fixed" selected>Fixa (Sequencial)</option>
+            <option value="manual">Manual (Setas na lista)</option>
+            <option value="dynamic">Dinâmica (Escolher Próximo)</option>
+          </select>
+        </div>
+
+        <button onclick="openSoundModal()" class="w-full py-2.5 mb-3 bg-slate-900 text-slate-300 rounded-2xl border border-slate-800 flex items-center justify-center gap-2 text-xs font-semibold transition active:scale-95">
+          <span>⚙️ Configuração Avançada</span>
+        </button>
+
+        <div class="mb-2">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Jogadores</span>
+            <button onclick="addPlayerConfig()" class="text-xs bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-bold px-3 py-1 rounded-full border border-amber-500/30 transition">
+              + Adicionar
+            </button>
+          </div>
+          <div id="player-configs" class="space-y-2 max-h-36 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <button onclick="startGame()" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-2xl text-base shadow-lg transition active:scale-[0.98]">
+        Iniciar Partida
+      </button>
+    </div>
+
+    <!-- TELA DO JOGO (ADAPTATIVA 100% HEIGHT) -->
+    <div id="game-screen" class="hidden flex-1 flex-col h-full w-full relative bg-slate-950 overflow-hidden z-20">
+      
+      <!-- BARRA DE CONTROLE SUPERIOR -->
+      <div class="flex items-center justify-between text-xs font-medium text-slate-400 p-2 bg-slate-950/80 border-b border-slate-800/80 z-20 flex-shrink-0 backdrop-blur-sm">
+        
+        <!-- BOTÃO DE SENTIDO -->
+        <button id="direction-btn" onclick="handleDirectionClick()" class="flex items-center gap-1.5 bg-slate-900 text-amber-400 px-3 py-1 rounded-full border border-slate-700/60 transition active:scale-95">
+          <span id="direction-icon">🔄</span>
+          <span id="direction-label" class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Horário</span>
+        </button>
+
+        <div></div>
+
+        <!-- BOTÃO DE PAUSA (HOLD) -->
+        <div 
+          id="hold-pause-btn"
+          onmousedown="startHoldPause()" 
+          onmouseup="cancelHoldPause()" 
+          onmouseleave="cancelHoldPause()"
+          ontouchstart="startHoldPause()" 
+          ontouchend="cancelHoldPause()"
+          class="relative flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-full border border-slate-700/60 cursor-pointer overflow-hidden active:scale-95 transition"
+        >
+          <div id="hold-progress" class="absolute left-0 top-0 bottom-0 bg-amber-500/40 w-0 transition-all duration-75 ease-linear pointer-events-none"></div>
+          <span class="text-[10px] font-semibold text-slate-300 z-10">Segure p/ Pausar</span>
+        </div>
+      </div>
+
+      <!-- ÁREA DE JOGADORES DIVIDIDA PROPORCIONALMENTE NA TELA -->
+      <div id="game-players-container" class="flex-1 flex flex-col w-full h-full p-2 gap-2 overflow-hidden">
+        <!-- Blocos dos Jogadores Gerados Dinamicamente -->
+      </div>
+
+      <!-- BOTÃO DE LIMPEZA FIXO NO RODAPÉ -->
+      <div class="p-2 bg-slate-950/80 border-t border-slate-800/80 z-20 flex-shrink-0 backdrop-blur-sm">
+        <div 
+          id="hold-cleanup-btn"
+          onmousedown="startHoldCleanup()" 
+          onmouseup="cancelHoldCleanup()" 
+          onmouseleave="cancelHoldCleanup()"
+          ontouchstart="startHoldCleanup()" 
+          ontouchend="cancelHoldCleanup()"
+          class="relative w-full py-2 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-center gap-2 text-xs font-bold text-slate-300 cursor-pointer overflow-hidden active:scale-[0.98] transition"
+        >
+          <div id="hold-cleanup-progress" class="absolute left-0 top-0 bottom-0 bg-blue-500/40 w-0 transition-all duration-75 ease-linear pointer-events-none"></div>
+          <span class="z-10">Limpeza 🧹</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DA FASE DE LIMPEZA -->
+    <div id="cleanup-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex-col items-center justify-center p-6 space-y-4">
+      <div class="text-center">
+        <h2 class="text-lg font-bold text-blue-400 uppercase tracking-wider">🧹 Fase de Limpeza</h2>
+        <p class="text-xs text-slate-400">Reorganize a ordem dos jogadores para a próxima rodada:</p>
+      </div>
+      <div id="cleanup-players-list" class="w-full space-y-2 max-h-64 overflow-y-auto"></div>
+      <button onclick="finishCleanupPhase()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-xs uppercase tracking-wider shadow-lg transition active:scale-95">
+        Concluir Limpeza ▶ (Novo 1º Jogador)
+      </button>
+    </div>
+
+    <!-- MODAL DE SELEÇÃO DINÂMICA DO PRÓXIMO JOGADOR -->
+    <div id="dynamic-next-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex-col items-center justify-center p-6 space-y-4">
+      <div class="text-center">
+        <h2 class="text-lg font-bold text-amber-400 uppercase tracking-wider">Quem joga a seguir?</h2>
+        <p class="text-xs text-slate-400">Escolha o jogador do próximo turno:</p>
+      </div>
+      <div id="dynamic-next-list" class="w-full space-y-2 max-h-60 overflow-y-auto"></div>
+    </div>
+
+    <!-- MODAL DE CONFIGURAÇÃO AVANÇADA -->
+    <div id="sound-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex-col items-center justify-center p-6 space-y-4">
+      <div class="w-full flex justify-between items-center mb-1">
+        <h2 class="text-lg font-bold text-amber-400 uppercase tracking-wider">Configuração Avançada</h2>
+        <button onclick="closeSoundModal()" class="text-xs text-slate-400 hover:text-white font-bold bg-slate-800 px-3 py-1 rounded-full border border-slate-700 transition">✕ Voltar</button>
+      </div>
+
+      <div class="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3 max-h-[75vh] overflow-y-auto">
+        
+        <!-- SEÇÃO: LIMPEZA AUTOMÁTICA -->
+        <div class="text-[11px] font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-1">🧹 Fase de Limpeza</div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="auto-cleanup-toggle" checked onchange="toggleAutoCleanupInputs()" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+            <span>Ativar Limpeza Automática</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-[10px] text-slate-400">A cada</span>
+            <input type="number" id="auto-cleanup-rounds" value="1" min="1" max="50" class="w-12 bg-slate-800 border border-slate-700 text-white text-xs font-bold text-center rounded px-1 py-1 outline-none">
+            <span class="text-[10px] text-slate-400">rodada(s)</span>
+          </div>
+        </div>
+
+        <div class="text-[11px] font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-1 pt-2">🎛️ Sentido do Jogo</div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <span>Exibir botão de sentido em todos os modos</span>
+          <input type="checkbox" id="show-direction-all-modes" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+        </div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <span>Inverter sentido sem pedir confirmação</span>
+          <input type="checkbox" id="skip-direction-confirm" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+        </div>
+
+        <div class="text-[11px] font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-1 pt-2">🔊 Sons & Alertas</div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <span>Tema Sonoro</span>
+          <select id="sound-theme" class="bg-slate-800 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 border border-slate-700 outline-none">
+            <option value="arcade" selected>Arcade (Retrô)</option>
+            <option value="elegant">Elegante (Marimba)</option>
+            <option value="minimal">Minimalista (Bip)</option>
+          </select>
+        </div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="bomb-warning-toggle" checked onchange="toggleBombInputs()" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+            <span>Iniciar Alerta qnd faltar:</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <input type="number" id="bomb-start-time" value="120" min="1" max="600" class="w-14 bg-slate-800 border border-slate-700 text-white text-xs font-bold text-center rounded px-1 py-1 outline-none">
+            <span class="text-[10px] text-slate-400">seg</span>
+          </div>
+        </div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <span>Entrar em Pânico qnd faltar:</span>
+          <div class="flex items-center gap-1">
+            <input type="number" id="panic-start-time" value="30" min="1" max="300" class="w-14 bg-slate-800 border border-slate-700 text-white text-xs font-bold text-center rounded px-1 py-1 outline-none">
+            <span class="text-[10px] text-slate-400">seg</span>
+          </div>
+        </div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <span>Beep Fixo de Turno a cada:</span>
+          <div class="flex items-center gap-1">
+            <input type="number" id="beep-interval" value="10" min="0" max="60" class="w-14 bg-slate-800 border border-slate-700 text-white text-xs font-bold text-center rounded px-1 py-1 outline-none">
+            <span class="text-[10px] text-slate-400">seg</span>
+          </div>
+        </div>
+        <div class="flex justify-between items-center text-xs font-medium text-slate-300">
+          <span>Vibração no Celular</span>
+          <input type="checkbox" id="vibration-toggle" checked class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+        </div>
+      </div>
+
+      <button onclick="saveSoundSettings()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl text-xs uppercase tracking-wider transition active:scale-95">
+        Salvar Alterações
+      </button>
+    </div>
+
+    <!-- MODAL DE REMOVER JOGADOR -->
+    <div id="remove-player-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex-col items-center justify-center p-6 space-y-4">
+      <div class="w-full flex justify-between items-center mb-1">
+        <h2 class="text-lg font-bold text-red-400 uppercase tracking-wider">Remover Jogador</h2>
+        <button onclick="closeRemovePlayerModal()" class="text-xs text-slate-400 hover:text-white font-bold bg-slate-800 px-3 py-1 rounded-full border border-slate-700 transition">✕ Voltar</button>
+      </div>
+      <div id="remove-players-list" class="w-full space-y-2 max-h-60 overflow-y-auto"></div>
+    </div>
+
+    <!-- MODAL DE PAUSA -->
+    <div id="pause-modal" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex-col items-center justify-center p-6 space-y-3">
+      <div class="text-center mb-1">
+        <h2 class="text-xl font-bold text-amber-400 uppercase tracking-wider">Jogo Pausado</h2>
+      </div>
+      <div class="w-full space-y-2">
+        <button onclick="resumeGame()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 font-bold rounded-2xl text-sm shadow-lg transition active:scale-95">▶ Retomar Jogo</button>
+
+        <button onclick="finishGameAndAnalyze()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition active:scale-95 flex items-center justify-center gap-1.5">
+          <span>🏆 Fim de Jogo & Análise</span>
+        </button>
+
+        <button onclick="openSoundModalFromPause()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl border border-slate-700/50">⚙️ Configuração Avançada</button>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="adjustActivePlayerTime(30)" class="py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl border border-slate-700/50">+30s Ativo</button>
+          <button onclick="adjustActivePlayerTime(-30)" class="py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl border border-slate-700/50">-30s Ativo</button>
+        </div>
+        <button onclick="skipTurn()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl border border-slate-700/50">Pular Turno</button>
+        <button onclick="openRemovePlayerModal()" class="w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold rounded-xl border border-amber-500/30">👥 Gerenciar Jogadores</button>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="confirmRestartPartida()" class="py-2.5 bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700">🔄 Reiniciar</button>
+          <button onclick="confirmExitToMainMenu()" class="py-2.5 bg-red-500/20 text-red-300 text-xs font-bold rounded-xl border border-red-500/30">🚪 Menu Inicial</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DE ANÁLISE FIM DE JOGO -->
+    <div id="analytics-modal" class="hidden absolute inset-0 bg-slate-950/98 backdrop-blur-md z-[70] flex-col items-center justify-between p-6 space-y-4">
+      <div class="text-center w-full pt-2">
+        <div class="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto text-2xl font-bold mb-2">
+          📊
+        </div>
+        <h2 class="text-xl font-black text-amber-400 uppercase tracking-wider">Estatísticas da Partida</h2>
+        <p class="text-xs text-slate-400">Resumo de tempo e turnos por jogador</p>
+      </div>
+
+      <div id="analytics-list" class="w-full space-y-2.5 overflow-y-auto max-h-[55vh] pr-1"></div>
+
+      <div class="w-full space-y-2 pt-2 border-t border-slate-800/80">
+        <button onclick="restartPartidaFromAnalytics()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl text-xs uppercase tracking-wider shadow-lg transition active:scale-95">
+          🔄 Jogar Novamente
+        </button>
+        <button onclick="exitToMainMenuFromAnalytics()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl text-xs uppercase tracking-wider border border-slate-700 transition">
+          🚪 Menu Inicial
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO UNIVERSAL -->
+    <div id="confirm-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-[60] flex-col items-center justify-center p-6">
+      <div class="w-full max-w-xs bg-slate-900 border border-slate-700/80 p-5 rounded-3xl text-center space-y-4 shadow-2xl">
+        <h3 class="text-base font-bold text-white mb-1">Tem certeza?</h3>
+        <p id="confirm-modal-msg" class="text-xs text-slate-300">Deseja realmente realizar esta ação?</p>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="cancelConfirmModal()" class="py-2.5 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
+          <button id="confirm-modal-btn" onclick="executePendingAction()" class="py-2.5 bg-red-600 text-white text-xs font-bold rounded-xl">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // SISTEMA DE ÁUDIO & CONFIGURAÇÕES
+    let audioCtx = null;
+    let soundTheme = 'arcade';
+    let vibrationEnabled = true;
+
+    let beepInterval = 10;
+    let bombWarningEnabled = true;
+    let bombStartTime = 120;
+    let panicStartTime = 30;
+    let orderMode = 'fixed';
+    let playDirection = 1;
+
+    // CONFIGURAÇÕES DA LIMPEZA AUTOMÁTICA
+    let autoCleanupEnabled = true;
+    let autoCleanupRounds = 1;
+    let turnsInCurrentRound = 0;
+    let completedRoundsCount = 0;
+
+    let showDirectionAllModes = false;
+    let skipDirectionConfirm = false;
+
+    let metaTriggeredForCurrentTurn = false;
+    let openedFromPause = false;
+    let pendingAction = null;
+    let wasPausedBeforeConfirm = false;
+
+    let holdCleanupTimer = null;
+    let holdTimer = null;
+    const HOLD_DURATION = 1000;
+
+    const PROFILE_KEY = 'boardgame_timer_profiles_data';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderProfiles();
+    });
+
+    function toggleAutoCleanupInputs() {
+      const isChecked = document.getElementById('auto-cleanup-toggle').checked;
+      document.getElementById('auto-cleanup-rounds').disabled = !isChecked;
+    }
+
+    // LÓGICA DO BOTÃO SEGURAR PARA FASE DE LIMPEZA
+    function startHoldCleanup() {
+      if (isPaused) return;
+      const progressBar = document.getElementById('hold-cleanup-progress');
+      progressBar.style.transition = `width ${HOLD_DURATION}ms linear`;
+      progressBar.style.width = '100%';
+
+      holdCleanupTimer = setTimeout(() => {
+        startCleanupPhase();
+        cancelHoldCleanup();
+      }, HOLD_DURATION);
+    }
+
+    function cancelHoldCleanup() {
+      clearTimeout(holdCleanupTimer);
+      const progressBar = document.getElementById('hold-cleanup-progress');
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+    }
+
+    function startCleanupPhase() {
+      isPaused = true;
+      renderCleanupPlayersList();
+      const modal = document.getElementById('cleanup-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function renderCleanupPlayersList() {
+      const list = document.getElementById('cleanup-players-list');
+      list.innerHTML = '';
+
+      gameState.forEach((p, idx) => {
+        list.innerHTML += `
+          <div class="flex items-center justify-between p-3 rounded-xl bg-slate-800 border border-slate-700">
+            <div class="flex items-center gap-2">
+              <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${p.color}"></span>
+              <span class="text-sm font-bold text-white">${p.name}</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="movePlayerInCleanup(${idx}, -1)" class="text-slate-200 px-2 py-1 text-xs bg-slate-700 rounded border border-slate-600 font-bold">▲</button>
+              <button onclick="movePlayerInCleanup(${idx}, 1)" class="text-slate-200 px-2 py-1 text-xs bg-slate-700 rounded border border-slate-600 font-bold">▼</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function movePlayerInCleanup(index, direction) {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= gameState.length) return;
+
+      const temp = gameState[index];
+      gameState[index] = gameState[targetIndex];
+      gameState[targetIndex] = temp;
+
+      renderCleanupPlayersList();
+    }
+
+    function finishCleanupPhase() {
+      const modal = document.getElementById('cleanup-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+
+      activeIndex = 0;
+      turnElapsedSeconds = 0;
+      turnsInCurrentRound = 0;
+      metaTriggeredForCurrentTurn = false;
+
+      showFeedback(`🧹 Nova rodada!`);
+      updateUI();
+      resumeGame();
+    }
+
+    function handleDirectionClick() {
+      wasPausedBeforeConfirm = isPaused;
+      isPaused = true;
+
+      const targetDirection = playDirection * -1;
+      const targetLabel = targetDirection === 1 ? 'Horário' : 'Anti-Horário';
+
+      if (skipDirectionConfirm) {
+        applyDirectionChangeAndPassTurn();
+      } else {
+        askConfirmation(`Deseja alterar o sentido para ${targetLabel} e passar a vez?`, () => {
+          applyDirectionChangeAndPassTurn();
+        });
+      }
+    }
+
+    function applyDirectionChangeAndPassTurn() {
+      playDirection *= -1;
+      const icon = document.getElementById('direction-icon');
+      const label = document.getElementById('direction-label');
+
+      if (playDirection === 1) {
+        icon.innerText = '🔄';
+        label.innerText = 'Horário';
+      } else {
+        icon.innerText = '🔁';
+        label.innerText = 'Anti-Horário';
+      }
+
+      isPaused = false;
+      nextTurn();
+    }
+
+    function updateDirectionButtonVisibility() {
+      const btn = document.getElementById('direction-btn');
+      if (showDirectionAllModes || orderMode === 'fixed') {
+        btn.classList.remove('hidden');
+      } else {
+        btn.classList.add('hidden');
+      }
+    }
+
+    function getSavedProfiles() {
+      const data = localStorage.getItem(PROFILE_KEY);
+      return data ? JSON.parse(data) : {};
+    }
+
+    function saveCurrentProfilePrompt() {
+      const profileName = prompt("Digite um nome para este perfil:");
+      if (!profileName || !profileName.trim()) return;
+
+      const profiles = getSavedProfiles();
+      profiles[profileName.trim()] = {
+        initTime: document.getElementById('init-time').value,
+        turnBonus: document.getElementById('turn-bonus').value,
+        quickLimit: document.getElementById('quick-limit').value,
+        quickBonus: document.getElementById('quick-bonus').value,
+        bombStartTime: document.getElementById('bomb-start-time').value,
+        panicStartTime: document.getElementById('panic-start-time').value,
+        beepInterval: document.getElementById('beep-interval').value,
+        soundTheme: document.getElementById('sound-theme').value,
+        bombWarningEnabled: document.getElementById('bomb-warning-toggle').checked,
+        orderMode: document.getElementById('order-mode').value,
+        autoCleanupEnabled: document.getElementById('auto-cleanup-toggle').checked,
+        autoCleanupRounds: document.getElementById('auto-cleanup-rounds').value,
+        showDirectionAllModes: document.getElementById('show-direction-all-modes').checked,
+        skipDirectionConfirm: document.getElementById('skip-direction-confirm').checked
+      };
+
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles));
+      renderProfiles();
+    }
+
+    function loadProfile(name) {
+      const profiles = getSavedProfiles();
+      const p = profiles[name];
+      if (!p) return;
+
+      document.getElementById('init-time').value = p.initTime || 5;
+      document.getElementById('turn-bonus').value = p.turnBonus !== undefined ? p.turnBonus : 30;
+      document.getElementById('quick-limit').value = p.quickLimit || 30;
+      document.getElementById('quick-bonus').value = p.quickBonus !== undefined ? p.quickBonus : 5;
+      document.getElementById('bomb-start-time').value = p.bombStartTime || 120;
+      document.getElementById('panic-start-time').value = p.panicStartTime || 30;
+      document.getElementById('beep-interval').value = p.beepInterval || 10;
+      document.getElementById('sound-theme').value = p.soundTheme || 'arcade';
+      document.getElementById('bomb-warning-toggle').checked = p.bombWarningEnabled !== undefined ? p.bombWarningEnabled : true;
+      document.getElementById('order-mode').value = p.orderMode || 'fixed';
+      document.getElementById('auto-cleanup-toggle').checked = p.autoCleanupEnabled !== undefined ? p.autoCleanupEnabled : true;
+      document.getElementById('auto-cleanup-rounds').value = p.autoCleanupRounds || 1;
+      document.getElementById('show-direction-all-modes').checked = p.showDirectionAllModes || false;
+      document.getElementById('skip-direction-confirm').checked = p.skipDirectionConfirm || false;
+
+      saveSoundSettings();
+      showFeedback(`Perfil carregado!`);
+    }
+
+    function deleteProfile(name) {
+      askConfirmation(`Deseja excluir o perfil "${name}"?`, () => {
+        const profiles = getSavedProfiles();
+        delete profiles[name];
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles));
+        renderProfiles();
+      });
+    }
+
+    function renderProfiles() {
+      const container = document.getElementById('profiles-list');
+      const profiles = getSavedProfiles();
+      const keys = Object.keys(profiles);
+
+      if (keys.length === 0) {
+        container.innerHTML = `<span class="text-[10px] text-slate-500 italic py-1">Nenhum perfil salvo</span>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      keys.forEach(name => {
+        const chip = document.createElement('div');
+        chip.className = "flex items-center gap-1 bg-slate-800 text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-700 flex-shrink-0";
+        chip.innerHTML = `
+          <span onclick="loadProfile('${name}')" class="cursor-pointer hover:text-amber-400 transition">${name}</span>
+          <button onclick="deleteProfile('${name}')" class="text-slate-500 hover:text-red-400 text-[10px] ml-1 font-bold">✕</button>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function triggerVibration(pattern = [50]) {
+      if (vibrationEnabled && navigator.vibrate) {
+        navigator.vibrate(pattern);
+      }
+    }
+
+    function toggleBombInputs() {
+      const isChecked = document.getElementById('bomb-warning-toggle').checked;
+      document.getElementById('bomb-start-time').disabled = !isChecked;
+      document.getElementById('panic-start-time').disabled = !isChecked;
+    }
+
+    function playBonusSound() {
+      initAudio();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = soundTheme === 'arcade' ? 'square' : 'sine';
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.setValueAtTime(880, now + 0.08);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.4);
+
+      triggerVibration([40, 30, 40]);
+    }
+
+    function playFixedIntervalBeep() {
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(392.00, now);
+
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    }
+
+    function playTickSound(customFreq = null) {
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = soundTheme === 'arcade' ? 'square' : 'sine';
+      osc.frequency.setValueAtTime(customFreq || 700, now);
+
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.07);
+    }
+
+    // EFEITO VISUAL DO BOMBA-RELÓGIO (FLASH & PULSO)
+    function triggerBombVisualEffect(remainingSec) {
+      const flashOverlay = document.getElementById('bomb-flash-overlay');
+      if (!flashOverlay) return;
+
+      // Dispara o flash de tela vermelha
+      flashOverlay.classList.remove('animate-bomb-flash');
+      void flashOverlay.offsetWidth; // Força re-flow para reiniciar a animação
+      flashOverlay.classList.add('animate-bomb-flash');
+
+      const activeCard = document.getElementById('active-card-node');
+      if (activeCard && remainingSec <= panicStartTime) {
+        activeCard.classList.remove('animate-panic-shake');
+        void activeCard.offsetWidth;
+        activeCard.classList.add('animate-panic-shake');
+        setTimeout(() => activeCard.classList.remove('animate-panic-shake'), 250);
+      }
+    }
+
+    function triggerBombTickSequence(remainingSec) {
+      if (!bombWarningEnabled || remainingSec > bombStartTime) return false;
+
+      const totalDangerRatio = (bombStartTime - remainingSec) / bombStartTime;
+      const calculatedFreq = 600 + (totalDangerRatio * 700);
+
+      let bipsInThisSecond = remainingSec <= panicStartTime ? 4 : 1;
+      const intervalDelay = 1000 / bipsInThisSecond;
+
+      for (let i = 0; i < bipsInThisSecond; i++) {
+        setTimeout(() => {
+          if (!isPaused) {
+            playTickSound(calculatedFreq);
+            triggerVibration([30]);
+            triggerBombVisualEffect(remainingSec);
+          }
+        }, i * intervalDelay);
+      }
+
+      return true;
+    }
+
+    function playGameOverSound() {
+      initAudio();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(350, now);
+      osc.frequency.linearRampToValueAtTime(90, now + 0.9);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.9);
+
+      triggerVibration([200, 100, 200]);
+    }
+
+    function openSoundModal() {
+      openedFromPause = false;
+      document.getElementById('sound-modal').classList.remove('hidden');
+      document.getElementById('sound-modal').classList.add('flex');
+    }
+
+    function openSoundModalFromPause() {
+      openedFromPause = true;
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('pause-modal').classList.remove('flex');
+      document.getElementById('sound-modal').classList.remove('hidden');
+      document.getElementById('sound-modal').classList.add('flex');
+    }
+
+    function closeSoundModal() {
+      document.getElementById('sound-modal').classList.add('hidden');
+      document.getElementById('sound-modal').classList.remove('flex');
+      if (openedFromPause) {
+        document.getElementById('pause-modal').classList.remove('hidden');
+        document.getElementById('pause-modal').classList.add('flex');
+      }
+    }
+
+    function saveSoundSettings() {
+      soundTheme = document.getElementById('sound-theme').value;
+      vibrationEnabled = document.getElementById('vibration-toggle').checked;
+      beepInterval = parseInt(document.getElementById('beep-interval').value) || 0;
+      bombWarningEnabled = document.getElementById('bomb-warning-toggle').checked;
+      orderMode = document.getElementById('order-mode').value;
+
+      autoCleanupEnabled = document.getElementById('auto-cleanup-toggle').checked;
+      autoCleanupRounds = parseInt(document.getElementById('auto-cleanup-rounds').value) || 1;
+
+      showDirectionAllModes = document.getElementById('show-direction-all-modes').checked;
+      skipDirectionConfirm = document.getElementById('skip-direction-confirm').checked;
+
+      updateDirectionButtonVisibility();
+
+      const inputBomb = parseInt(document.getElementById('bomb-start-time').value) || 120;
+      const inputPanic = parseInt(document.getElementById('panic-start-time').value) || 30;
+
+      if (inputPanic >= inputBomb) {
+        bombStartTime = inputBomb;
+        panicStartTime = Math.max(1, inputBomb - 1);
+        document.getElementById('panic-start-time').value = panicStartTime;
+      } else {
+        bombStartTime = inputBomb;
+        panicStartTime = inputPanic;
+      }
+
+      closeSoundModal();
+    }
+
+    function askConfirmation(message, actionFn) {
+      pendingAction = actionFn;
+      document.getElementById('confirm-modal-msg').innerText = message;
+      document.getElementById('confirm-modal').classList.remove('hidden');
+      document.getElementById('confirm-modal').classList.add('flex');
+    }
+
+    function closeConfirmModal() {
+      pendingAction = null;
+      document.getElementById('confirm-modal').classList.add('hidden');
+      document.getElementById('confirm-modal').classList.remove('flex');
+    }
+
+    function cancelConfirmModal() {
+      closeConfirmModal();
+      if (!wasPausedBeforeConfirm) {
+        resumeGame();
+      }
+    }
+
+    function executePendingAction() {
+      if (typeof pendingAction === 'function') {
+        pendingAction();
+      }
+      closeConfirmModal();
+    }
+
+    function openRemovePlayerModal() {
+      if (gameState.length <= 2) {
+        alert("O jogo precisa de pelo menos 2 jogadores!");
+        return;
+      }
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('pause-modal').classList.remove('flex');
+
+      const container = document.getElementById('remove-players-list');
+      container.innerHTML = '';
+
+      gameState.forEach((p, idx) => {
+        container.innerHTML += `
+          <button onclick="confirmRemovePlayerFromGame(${idx})" class="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800 border border-slate-700">
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full" style="background-color: ${p.color}"></span>
+              <span class="text-sm font-semibold">${p.name}</span>
+            </div>
+            <span class="text-xs text-red-400 font-bold">Remover ✕</span>
+          </button>
+        `;
+      });
+
+      document.getElementById('remove-player-modal').classList.remove('hidden');
+      document.getElementById('remove-player-modal').classList.add('flex');
+    }
+
+    function closeRemovePlayerModal() {
+      document.getElementById('remove-player-modal').classList.add('hidden');
+      document.getElementById('remove-player-modal').classList.remove('flex');
+      document.getElementById('pause-modal').classList.remove('hidden');
+      document.getElementById('pause-modal').classList.add('flex');
+    }
+
+    function confirmRemovePlayerFromGame(idx) {
+      const playerName = gameState[idx].name;
+      askConfirmation(`Deseja remover ${playerName}?`, () => {
+        removePlayerFromGame(idx);
+      });
+    }
+
+    function removePlayerFromGame(idx) {
+      const removedPlayer = gameState[idx].name;
+      gameState.splice(idx, 1);
+
+      if (activeIndex >= gameState.length) {
+        activeIndex = 0;
+      }
+
+      turnElapsedSeconds = 0;
+      metaTriggeredForCurrentTurn = false;
+
+      closeRemovePlayerModal();
+      showFeedback(`🏃‍♂️ ${removedPlayer} saiu`);
+      updateUI();
+      resumeGame();
+    }
+
+    // LÓGICA DO JOGO E ESTATÍSTICAS
+    let players = [
+      { name: 'Jogador 1', color: '#ef4444' },
+      { name: 'Jogador 2', color: '#3b82f6' },
+      { name: 'Jogador 3', color: '#10b981' },
+      { name: 'Jogador 4', color: '#f59e0b' }
+    ];
+    let gameState = [];
+    let activeIndex = 0;
+    let timer = null;
+    let initialSecondsConfig = 300;
+    let turnBonusSeconds = 30;
+    let quickLimitSeconds = 30;
+    let quickBonusSeconds = 5;
+    let turnElapsedSeconds = 0;
+    let isPaused = false;
+
+    function startHoldPause() {
+      if (isPaused) return;
+      const progressBar = document.getElementById('hold-progress');
+      progressBar.style.transition = `width ${HOLD_DURATION}ms linear`;
+      progressBar.style.width = '100%';
+
+      holdTimer = setTimeout(() => {
+        pauseGame();
+        cancelHoldPause();
+      }, HOLD_DURATION);
+    }
+
+    function cancelHoldPause() {
+      clearTimeout(holdTimer);
+      const progressBar = document.getElementById('hold-progress');
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+    }
+
+    renderPlayerConfigs();
+
+    function renderPlayerConfigs() {
+      const container = document.getElementById('player-configs');
+      container.innerHTML = '';
+      players.forEach((p, idx) => {
+        container.innerHTML += `
+          <div class="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800">
+            <input type="color" value="${p.color}" onchange="players[${idx}].color = this.value" class="w-7 h-7 rounded-lg border-0 bg-transparent cursor-pointer">
+            <input type="text" value="${p.name}" onchange="players[${idx}].name = this.value" class="flex-1 bg-transparent text-sm font-medium focus:outline-none text-slate-200">
+            ${players.length > 2 ? `
+              <button onclick="removePlayerConfig(${idx})" class="text-slate-500 hover:text-red-400 p-1">
+                ✕
+              </button>
+            ` : ''}
+          </div>
+        `;
+      });
+    }
+
+    function addPlayerConfig() {
+      if (players.length < 8) {
+        const defaultColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+        const color = defaultColors[players.length % defaultColors.length];
+        players.push({ name: `Jogador ${players.length + 1}`, color });
+        renderPlayerConfigs();
+      }
+    }
+
+    function removePlayerConfig(idx) {
+      players.splice(idx, 1);
+      renderPlayerConfigs();
+    }
+
+    function startGame() {
+      initAudio();
+      saveSoundSettings();
+
+      initialSecondsConfig = parseInt(document.getElementById('init-time').value) * 60;
+      turnBonusSeconds = parseInt(document.getElementById('turn-bonus').value) || 0;
+      quickLimitSeconds = parseInt(document.getElementById('quick-limit').value) || 0;
+      quickBonusSeconds = parseInt(document.getElementById('quick-bonus').value) || 0;
+      orderMode = document.getElementById('order-mode').value;
+      playDirection = 1;
+
+      gameState = players.map(p => ({ 
+        ...p, 
+        time: initialSecondsConfig,
+        totalTimeSpent: 0,
+        turnsCount: 0
+      }));
+      
+      activeIndex = 0;
+      turnElapsedSeconds = 0;
+      turnsInCurrentRound = 0;
+      completedRoundsCount = 0;
+      metaTriggeredForCurrentTurn = false;
+      isPaused = false;
+
+      document.getElementById('direction-icon').innerText = '🔄';
+      document.getElementById('direction-label').innerText = 'Horário';
+      updateDirectionButtonVisibility();
+
+      document.getElementById('setup-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('game-screen').classList.add('flex');
+
+      updateUI();
+      startTimer();
+    }
+
+    function startTimer() {
+      clearInterval(timer);
+      timer = setInterval(() => {
+        if (!isPaused && gameState[activeIndex].time > 0) {
+          gameState[activeIndex].time--;
+          turnElapsedSeconds++;
+          gameState[activeIndex].totalTimeSpent++;
+
+          const currentTotalTime = gameState[activeIndex].time;
+
+          const bombPlayed = triggerBombTickSequence(currentTotalTime);
+
+          if (!bombPlayed && beepInterval > 0 && turnElapsedSeconds > 0 && turnElapsedSeconds % beepInterval === 0) {
+            playFixedIntervalBeep();
+          }
+
+          if (quickLimitSeconds > 0 && turnElapsedSeconds > quickLimitSeconds && !metaTriggeredForCurrentTurn) {
+            metaTriggeredForCurrentTurn = true;
+            playGameOverSound();
+            showFeedback('⚠️ Meta Ágil Estourada!');
+          }
+
+          updateDisplayOnly();
+
+          if (currentTotalTime === 0) {
+            playGameOverSound();
+            pauseGame();
+            alert(`⏰ O tempo de ${gameState[activeIndex].name} acabou!`);
+          }
+        }
+      }, 1000);
+    }
+
+    // EXIBE FEEDBACK FLUTUANTE CENTRALIZADO DENTRO DO CARD ATIVO
+    function showFeedback(msg) {
+      const activeCard = document.getElementById('active-card-node');
+      if (!activeCard) return;
+
+      const existingFb = document.getElementById('card-floating-feedback');
+      if (existingFb) existingFb.remove();
+
+      const fb = document.createElement('div');
+      fb.id = 'card-floating-feedback';
+      fb.innerText = msg;
+      fb.className = 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm sm:text-base font-black uppercase tracking-wider px-4 py-1.5 rounded-full bg-slate-950/80 text-amber-400 border border-amber-500/40 shadow-2xl pointer-events-none z-30 backdrop-blur-sm animate-float-feedback whitespace-nowrap';
+
+      activeCard.appendChild(fb);
+
+      setTimeout(() => {
+        if (fb && fb.parentNode) fb.remove();
+      }, 1600);
+    }
+
+    function handleCardClick() {
+      if (isPaused) return;
+
+      if (orderMode === 'dynamic') {
+        openDynamicNextModal();
+      } else {
+        nextTurn();
+      }
+    }
+
+    function openDynamicNextModal() {
+      isPaused = true;
+
+      const modal = document.getElementById('dynamic-next-modal');
+      const list = document.getElementById('dynamic-next-list');
+      list.innerHTML = '';
+
+      gameState.forEach((p, idx) => {
+        if (idx !== activeIndex) {
+          list.innerHTML += `
+            <button onclick="selectDynamicNext(${idx})" class="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-800 border border-slate-700">
+              <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${p.color}"></span>
+              <span class="text-sm font-bold text-white">${p.name}</span>
+            </button>
+          `;
+        }
+      });
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function selectDynamicNext(nextIdx) {
+      document.getElementById('dynamic-next-modal').classList.add('hidden');
+      document.getElementById('dynamic-next-modal').classList.remove('flex');
+      
+      resumeGame();
+      nextTurn(nextIdx);
+    }
+
+    function nextTurn(forcedNextIdx = null) {
+      let totalAdded = turnBonusSeconds;
+      let msg = turnBonusSeconds > 0 ? `+${turnBonusSeconds}s` : 'Próximo';
+
+      if (quickLimitSeconds > 0 && turnElapsedSeconds <= quickLimitSeconds) {
+        totalAdded += quickBonusSeconds;
+        msg = `⚡ +${turnBonusSeconds + quickBonusSeconds}s (Bônus Ágil!)`;
+        playBonusSound();
+      } else {
+        triggerVibration([20]);
+      }
+
+      gameState[activeIndex].turnsCount++;
+      gameState[activeIndex].time += totalAdded;
+
+      turnElapsedSeconds = 0;
+      turnsInCurrentRound++;
+      metaTriggeredForCurrentTurn = false;
+
+      const totalPlayers = gameState.length;
+
+      // CHECA SE COMPLETOU UMA RODADA INTEIRA
+      let isRoundCompleted = false;
+      if (turnsInCurrentRound >= totalPlayers) {
+        turnsInCurrentRound = 0;
+        completedRoundsCount++;
+        isRoundCompleted = true;
+      }
+
+      if (forcedNextIdx !== null) {
+        activeIndex = forcedNextIdx;
+      } else {
+        activeIndex = (activeIndex + playDirection + totalPlayers) % totalPlayers;
+      }
+
+      updateUI();
+      showFeedback(msg);
+
+      // ATIVA A FASE DE LIMPEZA AUTOMÁTICA
+      if (isRoundCompleted && autoCleanupEnabled && completedRoundsCount % autoCleanupRounds === 0) {
+        setTimeout(() => {
+          startCleanupPhase();
+        }, 600);
+      }
+    }
+
+    function movePlayerInList(index, direction) {
+      const originalPauseState = isPaused;
+      isPaused = true;
+
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= gameState.length) {
+        isPaused = originalPauseState;
+        return;
+      }
+
+      const temp = gameState[index];
+      gameState[index] = gameState[targetIndex];
+      gameState[targetIndex] = temp;
+
+      if (activeIndex === index) {
+        activeIndex = targetIndex;
+      } else if (activeIndex === targetIndex) {
+        activeIndex = index;
+      }
+
+      updateUI();
+      if (!originalPauseState) resumeGame();
+    }
+
+    // DESENHO DO LAYOUT PROPORCIONAL E ADAPTATIVO
+    function updateUI() {
+      const container = document.getElementById('game-players-container');
+      container.innerHTML = '';
+
+      gameState.forEach((p, idx) => {
+        const isActive = idx === activeIndex;
+        const formattedTime = formatTime(p.time);
+        
+        const card = document.createElement('div');
+        
+        if (isActive) {
+          card.id = 'active-card-node';
+          const isPanic = p.time <= panicStartTime && p.time > 0;
+          const isBombWarning = bombWarningEnabled && p.time <= bombStartTime && p.time > 0;
+
+          card.className = `flex-[3] w-full rounded-2xl p-4 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 relative border-2 shadow-xl ${
+            isPanic 
+              ? 'border-red-500 shadow-red-900/50' 
+              : isBombWarning 
+                ? 'border-amber-400 shadow-amber-900/30' 
+                : 'border-amber-400 shadow-xl'
+          } active:scale-[0.99]`;
+          
+          card.style.backgroundColor = p.color;
+          card.onclick = handleCardClick;
+
+          let warningBadgeHtml = '';
+          if (isPanic) {
+            warningBadgeHtml = `<div class="text-[10px] font-black uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full mb-1 text-red-300 animate-pulse">⚠️ PÂNICO! TEMPO ESGOTANDO</div>`;
+          } else if (isBombWarning) {
+            warningBadgeHtml = `<div class="text-[10px] font-black uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full mb-1 text-amber-300">💣 BOMBA ACIONADA</div>`;
+          }
+
+          card.innerHTML = `
+            ${warningBadgeHtml}
+            <div class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white drop-shadow-md text-center line-clamp-1 mb-1">
+              ${p.name}
+            </div>
+            <div id="timer-display" class="text-6xl sm:text-7xl font-mono font-black tracking-tight text-white drop-shadow-lg my-1 ${
+              isPanic ? 'text-red-200 animate-pulse' : ''
+            }">
+              ${formattedTime}
+            </div>
+            <div class="text-xs font-mono opacity-80 mt-1">
+              Turno: ${turnElapsedSeconds}s
+            </div>
+          `;
+        } else {
+          card.className = `flex-1 w-full rounded-xl px-4 py-2 flex justify-between items-center bg-slate-900/90 border border-slate-800 transition-all opacity-80`;
+
+          let manualControlsHtml = '';
+          if (orderMode === 'manual') {
+            manualControlsHtml = `
+              <div class="flex items-center gap-1">
+                <button onclick="event.stopPropagation(); movePlayerInList(${idx}, -1)" class="text-slate-400 hover:text-white px-1.5 py-0.5 text-xs bg-slate-800 rounded">▲</button>
+                <button onclick="event.stopPropagation(); movePlayerInList(${idx}, 1)" class="text-slate-400 hover:text-white px-1.5 py-0.5 text-xs bg-slate-800 rounded">▼</button>
+              </div>
+            `;
+          }
+
+          card.innerHTML = `
+            <div class="flex items-center gap-2.5 min-w-0">
+              ${manualControlsHtml}
+              <div class="w-3.5 h-3.5 rounded-full flex-shrink-0" style="background-color: ${p.color}"></div>
+              <span class="text-base font-bold text-slate-200 truncate">${p.name}</span>
+            </div>
+            <div class="font-mono text-base font-bold text-slate-400 flex-shrink-0">
+              ${formattedTime}
+            </div>
+          `;
+        }
+
+        container.appendChild(card);
+      });
+    }
+
+    function updateDisplayOnly() {
+      const current = gameState[activeIndex];
+      const timerDisplay = document.getElementById('timer-display');
+
+      if (timerDisplay) {
+        timerDisplay.innerText = formatTime(current.time);
+        if (current.time <= panicStartTime && current.time > 0) {
+          timerDisplay.classList.add('text-red-200', 'animate-pulse');
+        } else {
+          timerDisplay.classList.remove('text-red-200', 'animate-pulse');
+        }
+      }
+
+      const turnDisplay = document.querySelector('#game-players-container .text-xs.font-mono');
+      if (turnDisplay) {
+        turnDisplay.innerText = `Turno: ${turnElapsedSeconds}s`;
+      }
+    }
+
+    function formatTime(totalSec) {
+      const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+      const s = String(totalSec % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function pauseGame() {
+      isPaused = true;
+      document.getElementById('pause-modal').classList.remove('hidden');
+      document.getElementById('pause-modal').classList.add('flex');
+    }
+
+    function resumeGame() {
+      isPaused = false;
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('pause-modal').classList.remove('flex');
+    }
+
+    function adjustActivePlayerTime(seconds) {
+      if (gameState.length === 0) return;
+      gameState[activeIndex].time = Math.max(0, gameState[activeIndex].time + seconds);
+      updateUI();
+      showFeedback(seconds > 0 ? `+${seconds}s` : `${seconds}s`);
+    }
+
+    function skipTurn() {
+      turnElapsedSeconds = 0;
+      metaTriggeredForCurrentTurn = false;
+      
+      const totalPlayers = gameState.length;
+      activeIndex = (activeIndex + playDirection + totalPlayers) % totalPlayers;
+
+      updateUI();
+      resumeGame();
+    }
+
+    function confirmRestartPartida() {
+      askConfirmation("Deseja reiniciar o tempo de todos os jogadores?", () => {
+        restartPartida();
+      });
+    }
+
+    function restartPartida() {
+      gameState = gameState.map(p => ({ 
+        ...p, 
+        time: initialSecondsConfig,
+        totalTimeSpent: 0,
+        turnsCount: 0 
+      }));
+      activeIndex = 0;
+      turnElapsedSeconds = 0;
+      turnsInCurrentRound = 0;
+      completedRoundsCount = 0;
+      metaTriggeredForCurrentTurn = false;
+      playDirection = 1;
+      document.getElementById('direction-icon').innerText = '🔄';
+      document.getElementById('direction-label').innerText = 'Horário';
+      updateUI();
+      resumeGame();
+    }
+
+    function confirmExitToMainMenu() {
+      askConfirmation("Deseja sair da partida e voltar ao menu inicial?", () => {
+        exitToMainMenu();
+      });
+    }
+
+    function exitToMainMenu() {
+      clearInterval(timer);
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('pause-modal').classList.remove('flex');
+      document.getElementById('analytics-modal').classList.add('hidden');
+      document.getElementById('analytics-modal').classList.remove('flex');
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('flex');
+      document.getElementById('setup-screen').classList.remove('hidden');
+    }
+
+    // FUNÇÕES DE FIM DE JOGO E ANÁLISE DE ESTATÍSTICAS
+    function finishGameAndAnalyze() {
+      if (turnElapsedSeconds > 0) {
+        gameState[activeIndex].turnsCount++;
+      }
+
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('pause-modal').classList.remove('flex');
+
+      renderAnalyticsList();
+
+      document.getElementById('analytics-modal').classList.remove('hidden');
+      document.getElementById('analytics-modal').classList.add('flex');
+    }
+
+    function renderAnalyticsList() {
+      const container = document.getElementById('analytics-list');
+      container.innerHTML = '';
+
+      let fastestAvg = Infinity;
+      let slowestAvg = -1;
+      let fastestPlayerIdx = -1;
+      let slowestPlayerIdx = -1;
+
+      gameState.forEach((p, idx) => {
+        const turns = p.turnsCount || 1;
+        const avgSeconds = Math.round(p.totalTimeSpent / turns);
+
+        if (avgSeconds < fastestAvg) {
+          fastestAvg = avgSeconds;
+          fastestPlayerIdx = idx;
+        }
+        if (avgSeconds > slowestAvg) {
+          slowestAvg = avgSeconds;
+          slowestPlayerIdx = idx;
+        }
+      });
+
+      gameState.forEach((p, idx) => {
+        const turns = p.turnsCount;
+        const avgSeconds = turns > 0 ? Math.round(p.totalTimeSpent / turns) : 0;
+        const formattedTotal = formatTime(p.totalTimeSpent);
+        const formattedAvg = formatTime(avgSeconds);
+
+        let badgeHtml = '';
+        if (idx === fastestPlayerIdx && turns > 0) {
+          badgeHtml = `<span class="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">⚡ Mais Ágil</span>`;
+        } else if (idx === slowestPlayerIdx && turns > 0 && gameState.length > 1) {
+          badgeHtml = `<span class="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">🧠 Pensador</span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = "bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col justify-between gap-2";
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-3.5 h-3.5 rounded-full flex-shrink-0" style="background-color: ${p.color}"></span>
+              <span class="text-sm font-bold text-white">${p.name}</span>
+            </div>
+            ${badgeHtml}
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 bg-slate-950/60 p-2 rounded-xl text-center border border-slate-800/60">
+            <div>
+              <span class="block text-[9px] text-slate-500 uppercase font-semibold">Total Pensando</span>
+              <span class="text-xs font-mono font-bold text-slate-200">${formattedTotal}</span>
+            </div>
+            <div>
+              <span class="block text-[9px] text-slate-500 uppercase font-semibold">Média / Turno</span>
+              <span class="text-xs font-mono font-bold text-amber-400">${formattedAvg}</span>
+            </div>
+            <div>
+              <span class="block text-[9px] text-slate-500 uppercase font-semibold">Turnos</span>
+              <span class="text-xs font-mono font-bold text-slate-200">${turns}</span>
+            </div>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function restartPartidaFromAnalytics() {
+      document.getElementById('analytics-modal').classList.add('hidden');
+      document.getElementById('analytics-modal').classList.remove('flex');
+      restartPartida();
+    }
+
+    function exitToMainMenuFromAnalytics() {
+      exitToMainMenu();
+    }
+  </script>
+</body>
+</html>
